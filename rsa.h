@@ -3,9 +3,6 @@
 
 #include <gmp.h>
 
-#define FCP_INTERN
-#define FCP_EXTERN extern
-
 #define MODULUS_SIZE 1024                   /* This is the number of bits we want in the modulus */
 #define BLOCK_SIZE (MODULUS_SIZE/8)         /* This is the size of a block that gets en/decrypted at once */
 #define BUF_SIZE (BLOCK_SIZE-2)
@@ -27,10 +24,10 @@ struct pvt_key {
 
 void print_hex(char* arr, int len);
 
-FCP_EXTERN void fcp_gen_keys(struct pvt_key *pvt, struct pub_key *pub);
-FCP_EXTERN void fcp_free_keys(struct pvt_key *pvt, struct pub_key *pub);
+void gen_keys(struct pvt_key *pvt, struct pub_key *pub);
+void free_keys(struct pvt_key *pvt, struct pub_key *pub);
 
-FCP_EXTERN int fcp_encrypt(char *out, char *in, int len, struct pub_key pub);
-FCP_EXTERN int fcp_decrypt(char *out, char *in, int len, struct pvt_key pvt);
+int encrypt(char **out, int *out_len, char *in, int len, struct pub_key pub);
+int decrypt(char **out, int *out_len, char *in, int len, struct pvt_key pvt);
 
 #endif

@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
 void print_hex(char* arr, int len)
 {
@@ -13,7 +14,7 @@ void print_hex(char* arr, int len)
 }
 
 /* NOTE: Assumes mpz_t's are initted in ku and kp */
-FCP_EXTERN void fcp_gen_keys(struct pvt_key *pvt, struct pub_key *pub)
+void gen_keys(struct pvt_key *pvt, struct pub_key *pub)
 {
 	char buf[BUFFER_SIZE];
 	int i;
@@ -100,7 +101,7 @@ FCP_EXTERN void fcp_gen_keys(struct pvt_key *pvt, struct pub_key *pub)
 	mpz_set(pub->n, pvt->n);
 }
 
-FCP_EXTERN void fcp_free_keys(struct pvt_key *pvt, struct pub_key *pub)
+void free_keys(struct pvt_key *pvt, struct pub_key *pub)
 {
 	if(pvt != NULL) {
 		mpz_clear(pvt->n);
@@ -116,13 +117,13 @@ FCP_EXTERN void fcp_free_keys(struct pvt_key *pvt, struct pub_key *pub)
 	}
 }
 
-FCP_INTERN void fcp_block_encrypt(mpz_t C, mpz_t M, struct pub_key pub)
+void block_encrypt(mpz_t C, mpz_t M, struct pub_key pub)
 {
 	/* C = M^e mod n */
 	mpz_powm(C, M, pub.e, pub.n);
 }
 
-FCP_EXTERN int fcp_encrypt(char *out, char *in, int len, struct pub_key pub)
+int encrypt(char **out, int *out_len, char *in, int len, struct pub_key pub)
 {
 	char *ret;
 	char block[BLOCK_SIZE];
@@ -131,12 +132,12 @@ FCP_EXTERN int fcp_encrypt(char *out, char *in, int len, struct pub_key pub)
 
 	int i = 0;
 	int left = len;
-	int num = (len / BUF_SIZE);
+	int num = (int)ceil((double)len / BUF_SIZE);
 	int size = num * BLOCK_SIZE;
 
 	ret = malloc(size);
 	if(ret == NULL)
-		return(-1);
+		return -1;
 
 	memset(ret, 0, size);
 
@@ -159,35 +160,49 @@ FCP_EXTERN int fcp_encrypt(char *out, char *in, int len, struct pub_key pub)
 		mpz_import(m, BLOCK_SIZE, 1, sizeof(block[0]), 0, 0, block);
 
 		/* Perform encryption on that block */
-		fcp_block_encrypt(c, m, pub);
+		block_encrypt(c, m, pub);
 	
 		memset(block, 0, BLOCK_SIZE);
 
 		/* Pull out bytestream of ciphertext */
 		mpz_export(block, &enc_len, 1, sizeof(char), 0, 0, c);
 
-		memcpy(out + to - enc_len, block, enc_len);
+		memcpy(ret + to - enc_len, block, enc_len);
 
 		left -= sz;
 		i++;
 	}
 
-	return size;
+	*out = ret;
+	*out_len = size;
+
+	mpz_clear(m);
+	mpz_clear(c);
+
+	return 0;
 } 
 
-FCP_INTERN void fcp_block_decrypt(mpz_t M, mpz_t C, struct pvt_key pvt)
+void block_decrypt(mpz_t M, mpz_t C, struct pvt_key pvt)
 {
 	mpz_powm(M, C, pvt.d, pvt.n);
 }
 
-FCP_EXTERN int fcp_decrypt(char *out, char *in, int len, struct pvt_key pvt)
+int decrypt(char **out, int *out_len, char *in, int len, struct pvt_key pvt)
 {
 	int i;
 	int num = len / BLOCK_SIZE;
 	int msg_idx = 0;
 	char block[BLOCK_SIZE];
+	int size = num * BUF_SIZE;
+	char *ret;
 	mpz_t c;
 	mpz_t m;
+
+	ret = malloc(size);
+	if(ret == NULL)
+		return -1;
+
+	memset(ret, 0, size);
 
 	mpz_init(c);
 	mpz_init(m);
@@ -198,14 +213,17 @@ FCP_EXTERN int fcp_decrypt(char *out, char *in, int len, struct pvt_key pvt)
 				in + (i * BLOCK_SIZE));
 
 		/* Decrypt block */
-		fcp_block_decrypt(m, c, pvt);
+		block_decrypt(m, c, pvt);
 
 		/* Convert back to bitstream */
 		mpz_export(block, NULL, 1, sizeof(char), 0, 0, m);
 
 		/* Copy over the message part of the plaintext to the message return var */
-		memcpy(out + (i * BUF_SIZE), block + 2, BUF_SIZE);
+		memcpy(ret + (i * BUF_SIZE), block + 2, BUF_SIZE);
 	}
+
+	*out = ret;
+	*out_len = size;
 
 	mpz_clear(m);
 	mpz_clear(c);

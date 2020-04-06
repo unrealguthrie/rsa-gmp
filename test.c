@@ -7,12 +7,15 @@
 
 int main(int argc, char **argv)
 {
-	int i, success = 0, error = 0;
-	char buf[BUF_SIZE];
-	char enc[BLOCK_SIZE];
-	char dec[BUF_SIZE];
+	int i;
 	struct pvt_key pvt;
 	struct pub_key pub;
+	char buf[BUF_SIZE];
+	int len = BUF_SIZE;
+	char *enc;
+	int enc_len;	
+	char *dec;
+	int dec_len;
 
 	srand(time(NULL));
 
@@ -27,7 +30,8 @@ int main(int argc, char **argv)
 	mpz_init(pvt.p); 
 	mpz_init(pvt.q); 
 
-	fcp_gen_keys(&pvt, &pub);
+	/* Generate the private and public keys */
+	gen_keys(&pvt, &pub);
 
 	printf("---------------Private Key------------------\n");
 	printf("pvt.n: %s\n", mpz_get_str(NULL, 16, pvt.n));
@@ -41,48 +45,39 @@ int main(int argc, char **argv)
 	printf("pub.e: %s\n", mpz_get_str(NULL, 16, pub.e));
 	printf("\n");
 
-	/*
-	   mpz_import(M, (BLOCK_SIZE), 1, sizeof(buf[0]), 0, 0, buf);
-	   printf("original is [%s]\n", mpz_get_str(NULL, 16, M)); 
-	   */
+	memset(buf, 0, len);
+	for(i = 0; i < len; i++)
+		buf[i] = rand() & 0xFF;
 
-	for(i = 0; i < 100000; i++) {
-		int j;
+	printf("Original: ");
+	print_hex(buf, len);
+	printf("\n");
 
-		memset(enc, 0, BLOCK_SIZE);
-		memset(dec, 0, BLOCK_SIZE);
-
-		memset(buf, 0, BUF_SIZE);
-		for(j = 0; j < BUF_SIZE; j++)
-			buf[j] = rand() & 0xFF;
-
-		fcp_encrypt(enc, buf, BUF_SIZE, pub);
-
-		fcp_decrypt(dec, enc, BLOCK_SIZE, pvt);
-
-		if(memcmp(dec, buf, BUF_SIZE) == 0)
-			success++;
-		else {
-			error++;
-
-			printf("Org: ");
-			print_hex(buf, BUF_SIZE);
-			printf("\n");
-
-			printf("Enc: ");
-			print_hex(enc, BLOCK_SIZE);
-			printf("\n");
-
-			printf("Dec: ");
-			print_hex(dec, BUF_SIZE);
-			printf("\n");
-			printf("\n");
-		}
+	if(encrypt(&enc, &enc_len, buf, len, pub) < 0) {
+		printf("Failed to encrypt\n");
+		goto err_free_keys;
 	}
 
+	printf("Encrypted: ");
+	print_hex(enc, enc_len);
 	printf("\n");
-	printf("Tested: %d, Success: %d, Error: %d\n", i, success, error);
-	printf("Failrate: %.04f\n", (float)error / (float)i);
+
+	if(decrypt(&dec, &dec_len, enc, enc_len, pvt) < 0) {
+		printf("Failed to decrypt\n");
+		goto err_free_enc;
+	}
+
+	printf("Decrypted: ");
+	print_hex(dec, dec_len);
+	printf("\n");
+
+	free(dec);
+
+err_free_enc:
+	free(enc);
+
+err_free_keys:
+	free_keys(&pvt, &pub);
 
 	return 0;
 }
